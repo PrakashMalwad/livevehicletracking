@@ -3,17 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live GPS Tracker</title>
+    <title>Live GPS Vehicle Tracker</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script> <!-- For notifications -->
 </head>
 <body>
-    <h2>Live GPS Tracker</h2>
-    <p id="coords">Waiting for GPS data...</p>
-    <div id="map"></div>
-
-    <script src="script.js"></script>
-    <script src="map.js"></script>
+    <header>
+        <h1>Live Vehicle GPS Tracker</h1>
+        <p id="coords">Waiting for GPS data...</p>
+        
+    </header>
+    <main>
+        <div id="map"></div>
+        <script src="script.js"></script>
+        <script src="map.js"></script>
+        <script>
+            document.getElementById('year').textContent = new Date().getFullYear();
+        </script>
+    </main>
+        
+    <footer>
+        <p>Designed by <strong>Prakash Malwad, Manhar, Abina, Abhidniya, Angel</strong></p>
+        &copy; <span id="year"></span> MLD Studios. All rights reserved.
+    </footer>
 </body>
 </html>

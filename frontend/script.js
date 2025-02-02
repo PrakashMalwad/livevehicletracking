@@ -1,4 +1,4 @@
-const apiURL = "https://192.168.1.108/gps";  // Change this to your backend URL
+const apiURL = "https://livevehicletracking.onrender.com/gps";  // Change this to your backend URL
 
 function fetchGPSData() {
     fetch(apiURL)
@@ -11,4 +11,4 @@ function fetchGPSData() {
         .catch(error => console.error("Error fetching GPS data:", error));
 }
 
-setInterval(fetchGPSData, 5000);
+setInterval(fetchGPSData, 1000);
