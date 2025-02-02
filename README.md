@@ -84,8 +84,8 @@ Here’s a quick view of how the ESP32 code sends data to the backend:
 #define RXD2 16  // GPS TX → ESP32 RX2
 #define TXD2 17  // GPS RX → ESP32 TX2
 
-const char* ssid = "Cannabies";      //WiFi SSID
-const char* password = "Qwerty@852"; //WiFi password
+const char* ssid = "";      //WiFi SSID
+const char* password = ""; //WiFi password
 const String serverURL = "https://livevehicletracking.onrender.com/update_gps";  //server URL
 
 TinyGPSPlus gps;
