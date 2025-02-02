@@ -75,51 +75,141 @@ The frontend fetches the data from the backend API and updates the map in real t
 Here’s a quick view of how the ESP32 code sends data to the backend:
 
 ```cpp
-#include <WiFi.h>
-#include <HTTPClient.h>
 #include <TinyGPS++.h>
+#include <WiFi.h>
+#include <HardwareSerial.h>
+#include <WebServer.h>
+#include <HTTPClient.h>  // Include HTTPClient library
+
+#define RXD2 16  // GPS TX → ESP32 RX2
+#define TXD2 17  // GPS RX → ESP32 TX2
+
+const char* ssid = "Cannabies";      //WiFi SSID
+const char* password = "Qwerty@852"; //WiFi password
+const String serverURL = "https://livevehicletracking.onrender.com/update_gps";  //server URL
 
 TinyGPSPlus gps;
-WiFiClient client;
+HardwareSerial gpsSerial(2);
+WebServer server(80); // Web server on port 80
 
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
-const char* serverName = "https://livevehicletracking.onrender.com/update_gps";
+double latitude = 0.0, longitude = 0.0;
+
+// HTML + JavaScript for OpenStreetMap
+const char HTML_PAGE[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 GPS Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+</head>
+<body>
+    <h2>ESP32 GPS Tracker</h2>
+    <p id="coords">Waiting for GPS data...</p>
+    <div id="map" style="width: 100%; height: 400px;"></div>
+
+    <script>
+        var map = L.map('map').setView([0, 0], 2); // Default position
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        var marker = L.marker([0, 0]).addTo(map);
+
+        function fetchGPSData() {
+            fetch("/gps")
+                .then(response => response.json())
+                .then(data => {
+                    if (data.lat !== null && data.lng !== null) {
+                        document.getElementById("coords").innerText = `Latitude: ${data.lat}, Longitude: ${data.lng}`;
+                        var newLatLng = new L.LatLng(data.lat, data.lng);
+                        marker.setLatLng(newLatLng);
+                        map.setView(newLatLng, 15);
+                    } else {
+                        document.getElementById("coords").innerText = "Waiting for valid GPS data...";
+                    }
+                })
+                .catch(error => console.error("Error fetching GPS data:", error));
+        }
+
+        setInterval(fetchGPSData, 5000);
+    </script>
+</body>
+</html>
+)rawliteral";
+
+void handleRoot() {
+    server.send(200, "text/html", HTML_PAGE);
+}
+
+void handleGPSData() {
+    // Always send last known coordinates, even if not updated recently
+    String jsonData = "{\"lat\":" + String(latitude, 6) + ", \"lng\":" + String(longitude, 6) + "}";
+    server.send(200, "application/json", jsonData);
+}
+
+void sendDataToServer(float lat, float lng) {
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        http.begin(serverURL);  // Send data to server URL
+        http.addHeader("Content-Type", "application/json");
+
+        String jsonPayload = "{\"lat\": " + String(lat, 6) + ", \"lng\": " + String(lng, 6) + "}";
+        int httpResponseCode = http.POST(jsonPayload);
+
+        Serial.print("Server Response: ");
+        Serial.println(httpResponseCode);
+
+        http.end();
+    } else {
+        Serial.println("WiFi Disconnected! Cannot send data.");
+    }
+}
 
 void setup() {
-  Serial.begin(115200);
-  WiFi.begin(ssid, password);
+    Serial.begin(115200);
+    gpsSerial.begin(9600, SERIAL_8N1, RXD2, TXD2);
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi...");
-  }
-  
-  Serial.println("Connected to WiFi");
+    // Connect to WiFi
+    WiFi.begin(ssid, password);
+    Serial.print("Connecting to WiFi...");
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(1000);
+        Serial.print(".");
+    }
+    Serial.println("\nWiFi Connected!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+
+    // Start web server
+    server.on("/", handleRoot);
+    server.on("/gps", handleGPSData);
+    server.begin();
+    Serial.println("Web server started.");
 }
 
 void loop() {
-  // Simulate GPS data reading
-  float latitude = gps.location.lat();
-  float longitude = gps.location.lng();
+    while (gpsSerial.available()) {
+        char c = gpsSerial.read();
+        gps.encode(c);
 
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    http.begin(serverName);
-    http.addHeader("Content-Type", "application/json");
-
-    String payload = String("{\"latitude\":") + latitude + ",\"longitude\":" + longitude + "}";
-
-    int httpResponseCode = http.POST(payload);
-
-    if (httpResponseCode > 0) {
-      Serial.println("Data sent successfully");
-    } else {
-      Serial.println("Error sending data");
+        if (gps.location.isUpdated()) {
+            latitude = gps.location.lat();
+            longitude = gps.location.lng();
+        }
     }
 
-    http.end();
-  }
+    // Print GPS data every 2 seconds
+    static unsigned long lastPrint = 0;
+    if (millis() - lastPrint > 2000) {
+        Serial.print("Latitude: ");
+        Serial.print(latitude, 6);
+        Serial.print(" | Longitude: ");
+        Serial.println(longitude, 6);
+        sendDataToServer(latitude, longitude);  // Send data to server
+        lastPrint = millis();
+    }
 
-  delay(10000);  // Send data every 10 seconds
+    // Handle web client requests
+    server.handleClient();
 }
+
